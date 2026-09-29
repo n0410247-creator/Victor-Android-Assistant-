@@ -12,7 +12,7 @@ gradle assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or use the `Build VICTOR AI APK` GitHub Actions workflow. Download its `VICTOR-AI-debug-APK` artifact and install the included `app-debug.apk`. Debug APKs are signed with Android's debug key and are installable; they are not Play Store release builds.
+Or use the `Build VICTOR AI APK` GitHub Actions workflow. Download its `VICTOR-AI-debug-APK` artifact and install the included `app-debug.apk`. Debug APKs are signed with Android's debug key and are installable; they are not Play Store release builds. The workflow verifies the APK signature and manifest. `smoke.sh` can be run on a working Android emulator to check first launch and onboarding; the hosted emulator was unable to complete boot here, so runtime/API integration tests remain unverified without a device and user credentials.
 
 ## Getting connected
 
