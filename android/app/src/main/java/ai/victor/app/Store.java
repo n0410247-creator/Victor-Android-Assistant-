@@ -28,7 +28,7 @@ final class Store {
     String get(String key, String def) { return prefs.getString(key, def); }
     void put(String key, String value) { prefs.edit().putString(key, value).apply(); }
     boolean bool(String key, boolean def) { return prefs.getBoolean(key, def); }
-    void bool(String key, boolean value) { prefs.edit().putBoolean(key, value).apply(); }
+    void setBool(String key, boolean value) { prefs.edit().putBoolean(key, value).apply(); }
     void clearKey(String name) { prefs.edit().remove("secret_" + name).apply(); }
     private SecretKey secret() throws Exception {
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore"); ks.load(null);

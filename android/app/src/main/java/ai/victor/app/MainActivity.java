@@ -140,9 +140,9 @@ public final class MainActivity extends Activity {
         gap(page, 12); TextView sub = text("Your personal AI assistant.", 18, MUTED); sub.setGravity(Gravity.CENTER); page.addView(sub);
         gap(page, 36); TextView desc = text("A more natural way to think, create and explore. Connect your own services to begin.", 14, MUTED); desc.setGravity(Gravity.CENTER); page.addView(desc);
         gap(page, 45); Button configure = button("CONNECT SERVICES  →", true); page.addView(configure, lp(-1, 54));
-        configure.setOnClickListener(v -> { store.bool("onboarded", true); showSettings(); });
+        configure.setOnClickListener(v -> { store.setBool("onboarded", true); showSettings(); });
         gap(page, 12); Button skip = button("Explore without connecting", false); page.addView(skip, lp(-1, 50));
-        skip.setOnClickListener(v -> { store.bool("onboarded", true); showChat(); });
+        skip.setOnClickListener(v -> { store.setBool("onboarded", true); showChat(); });
     }
     private void showChat() {
         setupShell(); LinearLayout page = vertical(); shell.addView(page, new FrameLayout.LayoutParams(-1, -1));
@@ -538,7 +538,7 @@ public final class MainActivity extends Activity {
         Button theme = button("ACCENT THEME · " + store.get("accent", "Cyan"), false); app.addView(theme, lp(-1, 48));
         theme.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Accent theme").setItems(new String[]{"Cyan", "Violet"}, (a, which) -> { store.put("accent", which == 0 ? "Cyan" : "Violet"); applyAccent(); showSettings(); }).show());
         CheckBox animations = checkbox("Message animations", store.bool("animations", true)); app.addView(animations);
-        animations.setOnCheckedChangeListener((b,v) -> store.bool("animations", v));
+        animations.setOnCheckedChangeListener((b,v) -> store.setBool("animations", v));
         gap(app, 10); Button clear = button("Clear all local conversations", false); app.addView(clear, lp(-1, 50));
         clear.setOnClickListener(v -> confirmClear());
         gap(page, 10); title(page, "DIAGNOSTICS", "Real test results, never assumed");
@@ -619,7 +619,7 @@ public final class MainActivity extends Activity {
             if (!gmodel.getText().toString().trim().matches("[a-zA-Z0-9._-]{3,80}")) { toast("Invalid model ID."); return; }
             try {
                 if (!gkey.getText().toString().trim().isEmpty()) { store.key("gemini", gkey.getText().toString().trim()); gkey.setText(""); }
-                store.put("gemini_model", gmodel.getText().toString().trim()); store.bool("gemini_enabled", enable.isChecked());
+                store.put("gemini_model", gmodel.getText().toString().trim()); store.setBool("gemini_enabled", enable.isChecked());
                 geminiStatus = "Not tested"; gstatus.setText("Gemini: Not tested"); toast("Saved. Run a connection test.");
             } catch (Exception e) { toast("Could not secure Gemini key."); }
         });
@@ -637,7 +637,7 @@ public final class MainActivity extends Activity {
             });
         });
         gap(backup, 8); Button gremove = button("REMOVE GEMINI KEY", false); backup.addView(gremove, lp(-1, 48));
-        gremove.setOnClickListener(v -> { store.clearKey("gemini"); store.bool("gemini_enabled", false); enable.setChecked(false); geminiStatus = "Not connected"; gstatus.setText(geminiStatus); toast("Gemini key removed."); });
+        gremove.setOnClickListener(v -> { store.clearKey("gemini"); store.setBool("gemini_enabled", false); enable.setChecked(false); geminiStatus = "Not connected"; gstatus.setText(geminiStatus); toast("Gemini key removed."); });
         gap(page, 12); page.addView(text("GonkaRouter's signup page is not its API. Create a key at gonkarouter.io/dashboard. Model IDs must match the provider's current model list.", 12, MUTED));
     }
     private void showVoiceSettings() {
@@ -676,8 +676,8 @@ public final class MainActivity extends Activity {
         remove.setOnClickListener(v -> { store.clearKey("eleven"); store.put("voice_id", ""); store.put("voice_name", "None"); voiceStatus = "Not connected"; vstatus.setText(voiceStatus); voiceName.setText("Selected voice: None"); stopAudio(); });
         LinearLayout options = vertical(); card(page, options); title(options, "PLAYBACK", "Adjust your listening experience");
         CheckBox enabled = checkbox("Enable voice playback", store.bool("voice_enabled", true)); options.addView(enabled);
-        enabled.setOnCheckedChangeListener((v, checked) -> { store.bool("voice_enabled", checked); if (!checked) stopAudio(); });
-        CheckBox auto = checkbox("Auto-speak responses", store.bool("auto_speak", false)); options.addView(auto); auto.setOnCheckedChangeListener((v, checked) -> store.bool("auto_speak", checked));
+        enabled.setOnCheckedChangeListener((v, checked) -> { store.setBool("voice_enabled", checked); if (!checked) stopAudio(); });
+        CheckBox auto = checkbox("Auto-speak responses", store.bool("auto_speak", false)); options.addView(auto); auto.setOnCheckedChangeListener((v, checked) -> store.setBool("auto_speak", checked));
         gap(options, 17); TextView speedLabel = text("Speech speed: " + store.get("speed", "1.0") + "×", 14, TEXT); options.addView(speedLabel);
         SeekBar speed = new SeekBar(this); speed.setMax(50); speed.setProgress((int)((Float.parseFloat(store.get("speed", "1.0")) - .7f) * 100)); options.addView(speed, lp(-1, 50));
         speed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
