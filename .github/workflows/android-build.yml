@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,7 +28,17 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
       - name: Build installable debug APK
         working-directory: android
-        run: gradle --no-daemon assembleDebug
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gradle --no-daemon assembleDebug > /tmp/victor-build.log 2>&1 && exit 0
+          tail -100 /tmp/victor-build.log
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='Android build diagnostics' -f head_sha="$GITHUB_SHA" \
+            -f status=completed -f conclusion=failure \
+            -f 'output[title]=APK build failed' \
+            -f "output[summary]=$(tail -c 26000 /tmp/victor-build.log)" > /dev/null || true
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: VICTOR-AI-debug-APK
