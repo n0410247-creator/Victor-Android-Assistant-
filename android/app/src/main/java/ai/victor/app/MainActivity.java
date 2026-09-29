@@ -16,6 +16,7 @@ import android.graphics.RadialGradient;
 import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
+import android.media.audiofx.Visualizer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -79,6 +80,7 @@ public final class MainActivity extends Activity {
     private String selectedName = "", pendingExport = "", pendingExportName = "";
     private SpeechRecognizer recognizer;
     private MediaPlayer player;
+    private Visualizer visualizer;
     private File playingFile;
     private final ArrayDeque<byte[]> audioQueue = new ArrayDeque<>();
     private boolean busy = false, listening = false, synthesizing = false;
@@ -212,8 +214,11 @@ public final class MainActivity extends Activity {
             int block = 0; while (matcher.find() && block++ < 6) {
                 String lang = matcher.group(1).trim().split("\\s+")[0], code = matcher.group(2);
                 String filename = "victor-code" + extension(lang); int number = block;
+                Matcher named = Pattern.compile("(?:^|\\s)filename=([A-Za-z0-9._-]{1,80})").matcher(matcher.group(1));
+                if (named.find()) filename = named.group(1);
+                final String exportName = filename;
                 action(actions, "COPY CODE " + number, () -> { ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Code", code)); toast("Code copied"); });
-                action(actions, "SAVE CODE " + number, () -> export(code, filename));
+                action(actions, "SAVE " + exportName, () -> export(code, exportName));
             }
         }
         if (animate && store.bool("animations", true)) { AlphaAnimation fade = new AlphaAnimation(0f, 1f); fade.setDuration(160); outer.startAnimation(fade); }
@@ -231,7 +236,8 @@ public final class MainActivity extends Activity {
         TextView t = text(label, 10, MUTED); t.setGravity(Gravity.CENTER_VERTICAL); t.setMinHeight(d(40)); t.setPadding(d(6), 0, d(9), 0);
         row.addView(t); t.setOnClickListener(v -> click.run());
     }
-    private void sendMessage() {
+    private void sendMessage() { sendMessage(false); }
+    private void sendMessage(boolean fromVoice) {
         if (busy) { toast("VICTOR is still responding."); return; }
         if (input == null) return;
         String prompt = input.getText().toString().trim(); Uri attachmentUri = selectedUri;
@@ -246,6 +252,8 @@ public final class MainActivity extends Activity {
         final String name = selectedName;
         selectedUri = null; selectedName = ""; if (attachmentLabel != null) attachmentLabel.setVisibility(View.GONE);
         input.setText(""); busy = true; refreshStatus();
+        final boolean shouldSpeak = fromVoice || store.bool("auto_speak", false);
+        if (fromVoice && !store.hasKey("eleven")) toast("Text will still arrive. Connect ElevenLabs in Voice settings to hear responses.");
         Store.Chat chat = current; Store.Message user = new Store.Message("user", prompt.isEmpty() ? "Please analyze the attached file." : prompt);
         if (attachmentUri != null) user.text += "\n📎 " + name;
         chat.messages.add(user); if (chat.messages.size() == 1) chat.title = prompt.isEmpty() ? name : prompt.substring(0, Math.min(42, prompt.length()));
@@ -269,7 +277,7 @@ public final class MainActivity extends Activity {
                     if (task == generation) ui.post(() -> {
                         if (task != generation || current != chat) return;
                         response.text = latest; updateLastBubble(response);
-                        maybeEarlySpeak(latest, task);
+                        maybeEarlySpeak(latest, task, shouldSpeak);
                     });
                 };
                 String key = store.key("primary"), gkey = store.key("gemini");
@@ -294,7 +302,7 @@ public final class MainActivity extends Activity {
                     if (usedBackup) geminiStatus = "Connected"; else primaryStatus = "Connected";
                     response.text = partial.toString();
                     if (usedBackup) response.text += "\n\n— Gemini backup";
-                    finishSpeak(partial.toString(), task); busy = false; refreshStatus(); saveChats(); renderMessages();
+                    finishSpeak(partial.toString(), task, shouldSpeak); busy = false; refreshStatus(); saveChats(); renderMessages();
                 });
             } catch (Exception error) {
                 String message = Services.explain(error); lastError = message;
@@ -310,14 +318,14 @@ public final class MainActivity extends Activity {
         });
     }
     private String earlySpoken = "";
-    private void maybeEarlySpeak(String text, int task) {
-        if (task != generation || !store.bool("voice_enabled", true) || !store.bool("auto_speak", false) || !store.hasKey("eleven") || earlySpoken.length() > 0) return;
+    private void maybeEarlySpeak(String text, int task, boolean shouldSpeak) {
+        if (task != generation || !shouldSpeak || !store.bool("voice_enabled", true) || !store.hasKey("eleven") || earlySpoken.length() > 0) return;
         Matcher end = Pattern.compile("[.!?]\\s").matcher(text);
         if (end.find() && end.end() >= 65 && end.end() <= 300) { earlySpoken = text.substring(0, end.end()); enqueueSpeech(earlySpoken); }
     }
-    private void finishSpeak(String text, int task) {
+    private void finishSpeak(String text, int task, boolean shouldSpeak) {
         if (task != generation) return;
-        if (store.bool("voice_enabled", true) && store.bool("auto_speak", false) && store.hasKey("eleven")) {
+        if (shouldSpeak && store.bool("voice_enabled", true) && store.hasKey("eleven")) {
             String rest = text.substring(Math.min(earlySpoken.length(), text.length())).trim(); if (!rest.isEmpty()) enqueueSpeech(rest);
         }
         earlySpoken = "";
@@ -439,7 +447,7 @@ public final class MainActivity extends Activity {
             @Override public void onError(int code) { listening = false; updateMic(); toast("Speech recognition failed (code " + code + "). Try again."); }
             @Override public void onResults(Bundle b) {
                 listening = false; updateMic(); ArrayList<String> values = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (values != null && !values.isEmpty() && input != null) { input.setText(values.get(0)); sendMessage(); }
+                if (values != null && !values.isEmpty() && input != null) { input.setText(values.get(0)); sendMessage(true); }
                 else toast("No speech recognized.");
             }
             @Override public void onPartialResults(Bundle b) {
@@ -459,12 +467,13 @@ public final class MainActivity extends Activity {
         if (mic == null) return;
         boolean speaking = player != null && player.isPlaying();
         mic.setTextColor(listening ? YELLOW : speaking ? GREEN : BLUE);
+        mic.setBackground(box(listening ? 0xff484029 : speaking ? 0xff1b453e : 0xff1b2845, listening ? YELLOW : speaking ? GREEN : 0xff335375, 24));
         mic.setContentDescription(listening ? "Listening, tap to stop" : speaking ? "VICTOR is speaking" : "Speak to VICTOR");
         mic.setScaleX(1f); mic.setScaleY(1f);
-        if (listening || speaking) {
+        if (listening || speaking && visualizer == null) {
             // The pulse runs only while recognition is active or audio is actually playing.
             mic.animate().scaleX(1.14f).scaleY(1.14f).setDuration(180).withEndAction(() -> {
-                if (listening || player != null && player.isPlaying()) mic.animate().scaleX(1f).scaleY(1f).setDuration(180).withEndAction(this::updateMic).start();
+                if (listening || player != null && player.isPlaying() && visualizer == null) mic.animate().scaleX(1f).scaleY(1f).setDuration(180).withEndAction(this::updateMic).start();
             }).start();
         }
     }
@@ -501,10 +510,29 @@ public final class MainActivity extends Activity {
             playingFile = audio; player = new MediaPlayer(); player.setDataSource(audio.getAbsolutePath());
             player.setOnCompletionListener(mp -> { releasePlayer(); playNext(); });
             player.setOnErrorListener((mp, what, extra) -> { releasePlayer(); toast("Audio playback failed."); playNext(); return true; });
-            player.setOnPreparedListener(mp -> { mp.start(); updateMic(); }); player.prepareAsync();
+            player.setOnPreparedListener(mp -> { mp.start(); startVisualizer(mp); updateMic(); }); player.prepareAsync();
         } catch (Exception e) { releasePlayer(); toast("Could not play generated audio."); playNext(); }
     }
+    private void startVisualizer(MediaPlayer mp) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            visualizer = new Visualizer(mp.getAudioSessionId());
+            visualizer.setCaptureSize(Visualizer.getCaptureSizeRange()[0]);
+            visualizer.setDataCaptureListener(new Visualizer.OnDataCaptureListener() {
+                @Override public void onWaveFormDataCapture(Visualizer v, byte[] waveform, int samplingRate) {
+                    long energy = 0; for (byte sample : waveform) { int centered = (sample & 0xff) - 128; energy += centered * centered; }
+                    float level = (float)Math.sqrt(energy / (double)waveform.length) / 128f;
+                    ui.post(() -> { if (player == mp && mp.isPlaying() && mic != null) {
+                        float scale = 1.0f + Math.min(.4f, level * .8f); mic.setScaleX(scale); mic.setScaleY(scale);
+                    } });
+                }
+                @Override public void onFftDataCapture(Visualizer v, byte[] fft, int rate) { }
+            }, Visualizer.getMaxCaptureRate() / 2, true, false);
+            visualizer.setEnabled(true);
+        } catch (Exception ignored) { if (visualizer != null) { try { visualizer.release(); } catch (Exception ex) { } visualizer = null; } }
+    }
     private void releasePlayer() {
+        if (visualizer != null) { try { visualizer.setEnabled(false); visualizer.release(); } catch (Exception ignored) { } visualizer = null; }
         if (player != null) { try { player.release(); } catch (Exception ignored) { } player = null; }
         if (playingFile != null) { playingFile.delete(); playingFile = null; } updateMic();
     }
