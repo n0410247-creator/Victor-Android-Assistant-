@@ -1,0 +1,28 @@
+name: Publish direct APK download
+on:
+  push:
+    branches: [arena/01a0eeb9-victor-android-assistant]
+    paths:
+      - '.github/workflows/publish-apk.yml'
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify APK exists
+        run: |
+          test -s VICTOR-AI-debug.apk
+          unzip -t VICTOR-AI-debug.apk | tail -1
+          sha256sum VICTOR-AI-debug.apk
+      - name: Publish downloadable GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create victor-ai-android-v1.0.0 VICTOR-AI-debug.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target arena/01a0eeb9-victor-android-assistant \
+            --title 'VICTOR AI Android APK' \
+            --notes 'Download VICTOR-AI-debug.apk under Assets and open it on an Android 8.0+ phone. This is a debug-signed APK. Enter your own AI and ElevenLabs keys in Settings; none are bundled. Live provider and on-device behavior require your credentials and device.'
